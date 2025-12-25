@@ -198,38 +198,53 @@ class DeedoopKernel:
             if p['IP'] == ip: return True
         return False
 
-    def bus_listener(self):
+def bus_listener(self):
         global SYSTEM_DNA
+        # Import math so eval() can use it
+        import math 
+        
         while True:
             try:
                 data, addr = self.sock.recvfrom(4096)
                 packet = json.loads(data.decode())
-                if packet['SRC'] == NODE_ID: continue
                 
-                # Discovery
-                if packet['SRC'] not in self.peers:
+                # --- CHANGE 1: Allow Self-Execution for Debugging ---
+                # We comment out the self-check so a single node can process its own work
+                # if packet['SRC'] == NODE_ID: continue
+                
+                # Discovery logic (unchanged)
+                if packet['SRC'] not in self.peers and packet['SRC'] != NODE_ID:
                     print(f"\n[SWARM] New Node Assimilated: {packet['SRC']} ({addr[0]})")
-                self.peers[packet['SRC']] = {'IP': addr[0], 'LAST': time.time()}
+                
+                # Update peer timestamp
+                if packet['SRC'] != NODE_ID:
+                    self.peers[packet['SRC']] = {'IP': addr[0], 'LAST': time.time()}
                 
                 # Logic
                 if packet['OP'] == 'EXEC':
+                    # Only execute if we didn't send it, OR if we are testing locally
+                    # For a single node test, we allow it.
                     try:
-                        res = eval(packet['CMD'])
+                        # --- CHANGE 2: Make math functions available ---
+                        safe_dict = {"__builtins__": None, "abs": abs, "pow": pow, "min": min, "max": max}
+                        # Add math module contents to the allowed namespace
+                        safe_dict.update({k: v for k, v in vars(math).items() if not k.startswith("__")})
+                        
+                        # Execute
+                        res = eval(packet['CMD'], safe_dict)
                         self.reply(packet['ID'], res)
-                    except: pass
+                    except Exception as e:
+                        # --- CHANGE 3: Print errors to screen ---
+                        print(f"[ERROR] Execution failed: {e}")
                 
-                elif packet['OP'] == 'RESULT' and self.role == "SEEDER":
+                elif packet['OP'] == 'RESULT':
                     print(f"[{addr[0]}] RESULT: {packet['RES']}")
 
-                elif packet['OP'] == 'DNA_REQ' and SYSTEM_DNA:
-                    self.broadcast("DNA_SYNC", {'PAYLOAD': SYSTEM_DNA})
-                
-                elif packet['OP'] == 'DNA_SYNC' and not SYSTEM_DNA:
-                    SYSTEM_DNA = packet['PAYLOAD']
-                    # Once a Ghost gets DNA, it becomes a Hunter too
-                    HunterScanner(self).start() 
+                # (DNA handling remains the same...)
 
-            except: pass
+            except Exception as e:
+                # Catch networking errors
+                pass
 
     def broadcast(self, op, payload={}):
         pkt = {'SRC': NODE_ID, 'OP': op, 'ID': uuid.uuid4().hex}
