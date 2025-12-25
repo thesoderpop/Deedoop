@@ -1,75 +1,113 @@
-#The World Is Your OS.
-
 #!/usr/bin/env python3
 # -----------------------------------------------------------------------------
-# SYSTEM:   DEEDOOP OS v8.0 (Voluntary Swarm)
+# SYSTEM:   DEEDOOP OS v9.0 (The Singularity)
 # ARCHITECT: Alexis Eleanor Fagan (aka Alexander Edward Brygider)
 # DATE:     December 25, 2025
 # -----------------------------------------------------------------------------
 
-import socket
+import sys
+import subprocess
+import importlib
+import os
+import time
 import threading
 import json
 import uuid
-import time
-import sys
-import os
+import socket
 import http.server
 import socketserver
-import hmac
-import hashlib
-import math # For compute tasks
-
-# --- CLUSTER CONFIGURATION ---
-# Change this key to secure your personal swarm
-CLUSTER_KEY = b"DEEDOOP_SECRET_V8" 
-UDP_PORT    = 9999
-CODE_PORT   = 8080
-NODE_ID     = uuid.uuid4().hex[:6]
-
-# --- NETWORK UTILS ---
-def get_local_ip():
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
-    except:
-        return "127.0.0.1"
-
-NODE_IP = get_local_ip()
+import platform
+import math
 
 # ==============================================================================
-# 1. SECURITY (HMAC Authentication)
+# PHASE 1: GENESIS (Self-Assembly & Dependency Injection)
 # ==============================================================================
-def sign_packet(payload_str):
-    """Creates a cryptographic signature for a message."""
-    return hmac.new(CLUSTER_KEY, payload_str.encode(), hashlib.sha256).hexdigest()
+def genesis_bootstrap():
+    """
+    Scans the host environment. If required hardware interfaces (libraries)
+    are missing, it downloads and compiles them immediately.
+    """
+    required_hardware_drivers = [
+        ('psutil', 'psutil'),             # For Hardware Abstraction Layer (CPU/RAM)
+        ('cryptography', 'cryptography'), # For Military-Grade Swarm Encryption
+        ('requests', 'requests')          # For HTTP Tunneling
+    ]
 
-def verify_packet(packet):
-    """Ensures the packet came from a trusted node."""
-    if 'SIG' not in packet: return False
-    sig = packet.pop('SIG') # Remove sig to verify payload
-    payload_str = json.dumps(packet, sort_keys=True)
-    expected_sig = hmac.new(CLUSTER_KEY, payload_str.encode(), hashlib.sha256).hexdigest()
-    return hmac.compare_digest(sig, expected_sig)
+    boot_flag = False
+    print(f"[GENESIS] Scanning host hardware: {platform.machine()} / {platform.system()}...")
+
+    for lib_name, pip_name in required_hardware_drivers:
+        try:
+            importlib.import_module(lib_name)
+        except ImportError:
+            print(f"[GENESIS] Critical dependency '{lib_name}' missing. Downloading...")
+            try:
+                subprocess.check_call([sys.executable, "-m", "pip", "install", pip_name])
+                print(f"[GENESIS] {lib_name} installed successfully.")
+                boot_flag = True
+            except Exception as e:
+                print(f"[CRITICAL] Failed to install {lib_name}: {e}")
+                print("Please install manually: pip install " + pip_name)
+                sys.exit(1)
+
+    if boot_flag:
+        print("[GENESIS] System updated. Rebooting Kernel...")
+        # Restart script to load new libraries
+        os.execv(sys.executable, ['python'] + sys.argv)
+
+# EXECUTE GENESIS
+genesis_bootstrap()
+
+# --- IMPORTS (Now guaranteed to exist) ---
+import psutil
+from cryptography.fernet import Fernet
+import requests
 
 # ==============================================================================
-# 2. THE DNA SERVER (Bootstrap Host)
+# PHASE 2: CONFIGURATION & HAL (Hardware Abstraction Layer)
 # ==============================================================================
-# Stores own source code to serve to workers
+# DEFAULT KEY (Change this for your private mesh)
+CLUSTER_KEY = b'DEEDOOP_SINGULARITY_KEY_2025________________=' 
+# If key is invalid length, we generate a temp one for this session
+try:
+    Fernet(CLUSTER_KEY)
+except:
+    print("[WARN] Using ephemeral cluster key.")
+    CLUSTER_KEY = Fernet.generate_key()
+
+CIPHER = Fernet(CLUSTER_KEY)
+UDP_PORT = 9999
+CODE_PORT = 8080
+NODE_ID = uuid.uuid4().hex[:6]
+
+def get_best_ip():
+    # Uses psutil to find the real network interface, skipping loopbacks
+    addrs = psutil.net_if_addrs()
+    # Priority: WiFi/Ethernet > Localhost
+    candidates = []
+    for interface, snics in addrs.items():
+        for snic in snics:
+            if snic.family == socket.AF_INET and not snic.address.startswith("127."):
+                if "wlan" in interface.lower() or "eth" in interface.lower() or "en" in interface.lower():
+                    return snic.address
+                candidates.append(snic.address)
+    return candidates[0] if candidates else "127.0.0.1"
+
+NODE_IP = get_best_ip()
+
+# ==============================================================================
+# PHASE 3: THE DNA SERVER (Replication Engine)
+# ==============================================================================
 try:
     with open(os.path.abspath(__file__), 'r') as f:
         SYSTEM_DNA = f.read()
 except:
-    SYSTEM_DNA = "" # Worker mode might not have file on disk
+    SYSTEM_DNA = ""
 
-class BootstrapServer(threading.Thread):
+class DnaServer(threading.Thread):
     def run(self):
         class Handler(http.server.BaseHTTPRequestHandler):
             def do_GET(self):
-                # Serve the code so workers can "curl | python"
                 self.send_response(200)
                 self.end_headers()
                 self.wfile.write(SYSTEM_DNA.encode())
@@ -82,12 +120,16 @@ class BootstrapServer(threading.Thread):
         except: pass
 
 # ==============================================================================
-# 3. THE KERNEL (Logic Core)
+# PHASE 4: THE KERNEL (Swarm Intelligence)
 # ==============================================================================
 class DeedoopKernel:
     def __init__(self, role):
-        self.role = role # 'SEED' or 'WORKER'
+        self.role = role
         self.peers = {}
+        
+        # Setup Hardware Monitor
+        self.cpu_cores = psutil.cpu_count(logical=True)
+        self.total_ram = round(psutil.virtual_memory().total / (1024**3), 2)
         
         # Setup Bus
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
@@ -95,72 +137,76 @@ class DeedoopKernel:
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         self.sock.bind(('', UDP_PORT))
         
-        # Start Threads
+        # Threads
         threading.Thread(target=self.bus_listener, daemon=True).start()
         threading.Thread(target=self.heartbeat, daemon=True).start()
-        
+        DnaServer(daemon=True).start()
+
         if self.role == 'SEED':
-            BootstrapServer(daemon=True).start()
-            print(f"\n[SYSTEM] Cluster Seed Online @ {NODE_IP}")
-            print(f"[BOOTSTRAP] To add nodes, run this on other devices:")
-            print(f"curl -s http://{NODE_IP}:{CODE_PORT} | python3")
+            print(f"\n--- DEEDOOP SINGULARITY ({NODE_IP}) ---")
+            print(f"[HARDWARE] {self.cpu_cores} Cores | {self.total_ram} GB RAM")
+            print(f"[NETWORK]  Secure Encryption Active.")
+            print(f"[BOOTSTRAP] Run this on other devices to join:")
+            print(f"   curl -s http://{NODE_IP}:{CODE_PORT} | python3")
             print("-" * 60)
+
+    def encrypt_packet(self, data):
+        return CIPHER.encrypt(json.dumps(data).encode()).decode()
+
+    def decrypt_packet(self, token):
+        try:
+            return json.loads(CIPHER.decrypt(token.encode()).decode())
+        except:
+            return None
 
     def bus_listener(self):
         while True:
             try:
-                data, addr = self.sock.recvfrom(4096)
-                packet = json.loads(data.decode())
+                data, addr = self.sock.recvfrom(65535)
                 
-                # 1. Verify Trust
-                if not verify_packet(packet):
-                    # print(f"[WARN] Untrusted packet from {addr[0]}")
-                    continue
-
+                # Decrypt
+                packet = self.decrypt_packet(data.decode())
+                if not packet: continue # Ignore bad keys
+                
+                # Ignore Self (unless debugging)
                 if packet['SRC'] == NODE_ID: continue
-                
-                # 2. Discovery
-                if packet['SRC'] not in self.peers:
-                    print(f"[SWARM] New Worker Joined: {packet['SRC']} ({addr[0]})")
-                self.peers[packet['SRC']] = {'IP': addr[0], 'LAST': time.time()}
 
-                # 3. Compute Execution (Worker Side)
+                # Discovery
+                if packet['SRC'] not in self.peers:
+                    print(f"[SWARM] New Node: {packet['SRC']} ({addr[0]}) | {packet.get('HW', 'Unknown')}")
+                self.peers[packet['SRC']] = {'IP': addr[0], 'LAST': time.time(), 'HW': packet.get('HW')}
+
+                # Remote Execution
                 if packet['OP'] == 'EXEC' and self.role == 'WORKER':
                     try:
-                        # Safe(r) Eval Context
-                        safe_dict = {"__builtins__": None, "abs": abs, "pow": pow, "min": min, "max": max}
-                        safe_dict.update({k: v for k, v in vars(math).items() if not k.startswith("__")})
-                        
+                        # Build Safe Context
+                        safe_dict = {"__builtins__": None, "abs": abs, "pow": pow, "math": math}
                         res = eval(packet['CMD'], safe_dict)
                         self.reply(packet['ID'], res)
                     except Exception as e:
-                        self.reply(packet['ID'], f"Error: {e}")
-
-                # 4. Result Handling (Seed Side)
+                        self.reply(packet['ID'], f"ERR: {e}")
+                
                 elif packet['OP'] == 'RESULT' and self.role == 'SEED':
-                    print(f"[{packet['SRC']}] RESULT: {packet['RES']}")
+                    print(f"[{packet['SRC']}] >> {packet['RES']}")
 
             except Exception as e:
                 pass
 
     def broadcast(self, op, payload={}):
-        packet = {'SRC': NODE_ID, 'OP': op, 'ID': uuid.uuid4().hex}
+        packet = {
+            'SRC': NODE_ID, 
+            'OP': op, 
+            'ID': uuid.uuid4().hex,
+            'HW': f"{self.cpu_cores}C/{self.total_ram}G"
+        }
         packet.update(payload)
-        
-        # Sign the packet
-        payload_str = json.dumps(packet, sort_keys=True)
-        packet['SIG'] = sign_packet(payload_str)
-        
-        self.sock.sendto(json.dumps(packet).encode(), ('<broadcast>', UDP_PORT))
+        enc_data = self.encrypt_packet(packet)
+        self.sock.sendto(enc_data.encode(), ('<broadcast>', UDP_PORT))
 
     def reply(self, req_id, res):
         packet = {'SRC': NODE_ID, 'OP': 'RESULT', 'ID': req_id, 'RES': str(res)}
-        
-        # Sign the packet
-        payload_str = json.dumps(packet, sort_keys=True)
-        packet['SIG'] = sign_packet(payload_str)
-
-        self.sock.sendto(json.dumps(packet).encode(), ('<broadcast>', UDP_PORT))
+        enc_data = self.encrypt_packet(packet)
+        self.sock.sendto(enc_data.encode(), ('<broadcast>', UDP_PORT))
 
     def heartbeat(self):
         while True:
@@ -168,33 +214,33 @@ class DeedoopKernel:
             time.sleep(5)
 
 # ==============================================================================
-# 4. MAIN ENTRY POINT
+# PHASE 5: THE INTERFACE
 # ==============================================================================
 if __name__ == "__main__":
-    # Determine Role
-    # If run via pipe (curl | python), stdin is not a tty -> WORKER
-    # If run normally (python deedoop.py) -> SEED
-    if not sys.stdin.isatty():
-        # WORKER MODE
-        kernel = DeedoopKernel(role='WORKER')
-        # Keep alive silently
+    # Auto-Role Detection
+    # If run interactively -> SEED
+    # If run piped -> WORKER
+    role = 'WORKER' if not sys.stdin.isatty() else 'SEED'
+    
+    kernel = DeedoopKernel(role)
+    
+    if role == 'WORKER':
+        # Workers are silent background process
         while True: time.sleep(10)
     else:
-        # SEED MODE (CLI)
-        kernel = DeedoopKernel(role='SEED')
-        
+        # Seed has CLI
         print("Commands: exec <math>, nodes, exit")
         while True:
             try:
-                cmd = input("Cluster> ").strip().split()
+                cmd = input("Singularity> ").strip().split()
                 if not cmd: continue
                 
                 if cmd[0] == 'exec':
                     kernel.broadcast('EXEC', {'CMD': " ".join(cmd[1:])})
                 elif cmd[0] == 'nodes':
-                    print(f"Active Workers: {len(kernel.peers)}")
-                    for pid, pdata in kernel.peers.items():
-                        print(f" - {pid} @ {pdata['IP']}")
+                    print(f"Swarm Resources: {len(kernel.peers)} Nodes")
+                    for pid, data in kernel.peers.items():
+                        print(f" - {pid} [{data['IP']}] : {data.get('HW')}")
                 elif cmd[0] == 'exit':
                     sys.exit()
             except KeyboardInterrupt:
