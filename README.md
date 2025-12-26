@@ -1,3 +1,255 @@
+# DEEDOOP OS v14.0 — GENESIS
+
+## A Zero-Dependency Bare-Metal Operating System with Lattice Resource Protocol
+
+**© 2025 Alexis Eleanor Fagan (aka Alexander Edward Brygider). All Rights Reserved Worldwide.**
+
+---
+
+## The Ultimate Evolution
+
+| Version | Layer | Dependencies |
+|---------|-------|--------------|
+| v9-11 | Python | Python 3.8+, Linux/macOS/Windows |
+| v12 | Quine | Python 3.8+ |
+| v13 | Hydra | Python 3.8+ |
+| **v14** | **Bare Metal** | **NONE** |
+
+---
+
+## What Is Genesis?
+
+DEEDOOP OS v14.0 "Genesis" is a **true operating system** that:
+
+1. **Runs on bare metal** — No Linux, no Windows, no macOS underneath
+2. **Boots directly from BIOS** — First code executed by the CPU
+3. **Has zero dependencies** — No compiler, no assembler, no toolchain
+4. **Self-constructs from hex** — The genome is embedded in a shell script
+5. **Implements Lattice Protocol** — 9×9 cryptographic resource grids
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              HARDWARE                                        │
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐           │
+│  │   CPU   │  │   RAM   │  │  VIDEO  │  │KEYBOARD │  │  TIMER  │           │
+│  └────┬────┘  └────┬────┘  └────┬────┘  └────┬────┘  └────┬────┘           │
+│       │            │            │            │            │                  │
+│       └────────────┴────────────┴────────────┴────────────┘                  │
+│                                 │                                            │
+│                          ┌──────┴──────┐                                     │
+│                          │    BIOS     │                                     │
+│                          └──────┬──────┘                                     │
+│                                 │                                            │
+│  ┌──────────────────────────────┴──────────────────────────────────────────┐│
+│  │                        DEEDOOP OS v14.0                                  ││
+│  │  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐             ││
+│  │  │  BOOTLOADER    │  │   LATTICE      │  │   DISPLAY      │             ││
+│  │  │  (512 bytes)   │→│   KERNEL       │→│   SUBSYSTEM    │             ││
+│  │  │  MBR + FAT12   │  │   9×9 Grid     │  │   VGA Text     │             ││
+│  │  └────────────────┘  └────────────────┘  └────────────────┘             ││
+│  └──────────────────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## The Hex-Injection Model
+
+Traditional OS development:
+```
+Source Code → Compiler → Assembler → Linker → Binary → Boot
+```
+
+DEEDOOP Genesis:
+```
+Shell Script (contains hex genome) → Binary → Boot
+```
+
+The **entire operating system** exists as a hexadecimal string inside a shell script. Running the script reconstructs the bootable image.
+
+---
+
+## Memory Map
+
+When DEEDOOP OS boots, memory is organized as:
+
+| Address | Size | Purpose |
+|---------|------|---------|
+| `0x0000:0x7C00` | 512B | Bootloader (MBR) |
+| `0x0000:0x7E00` | 512B | Kernel code |
+| `0x0000:0x8000` | 256B | String data |
+| `0x0000:0x9000` | 81B | Lattice Grid (9×9) |
+| `0x0000:0x9051` | 1B | Grid checksum |
+| `0x0000:0x9100` | 16B | Node identity |
+| `0x0000:0xA000` | 4KB | Stack |
+| `0x0000:0xB800` | 4KB | Video memory |
+
+---
+
+## The Lattice Resource Protocol
+
+As defined in the academic paper, each node maintains a 9×9 grid:
+
+```
+     0   1   2   3   4   5   6   7   8
+   ┌───┬───┬───┬───┬───┬───┬───┬───┬───┐
+ 0 │ · │ · │ · │ · │ · │ · │ · │ · │ · │
+   ├───┼───┼───┼───┼───┼───┼───┼───┼───┤
+ 1 │ · │ · │ · │ · │ · │ · │ · │ · │ · │
+   ├───┼───┼───┼───┼───┼───┼───┼───┼───┤
+ 2 │ · │ · │ · │ · │ · │ · │ · │ · │ · │
+   ├───┼───┼───┼───┼───┼───┼───┼───┼───┤
+ 3 │ · │ · │ · │ · │ · │ · │ · │ · │ · │
+   ├───┼───┼───┼───┼───┼───┼───┼───┼───┤
+ 4 │ · │ · │ · │ · │ · │ · │ · │ · │ · │
+   ├───┼───┼───┼───┼───┼───┼───┼───┼───┤
+ 5 │ · │ · │ · │ · │ · │ · │ · │ · │ · │
+   ├───┼───┼───┼───┼───┼───┼───┼───┼───┤
+ 6 │ · │ · │ · │ · │ · │ · │ · │ · │ · │
+   ├───┼───┼───┼───┼───┼───┼───┼───┼───┤
+ 7 │ · │ · │ · │ · │ · │ · │ · │ · │ · │
+   ├───┼───┼───┼───┼───┼───┼───┼───┼───┤
+ 8 │ Σ │ Σ │ Σ │ Σ │ Σ │ Σ │ Σ │ Σ │ R │ ← Parity row
+   └───┴───┴───┴───┴───┴───┴───┴───┴───┘
+                                     ↑
+                               Parity column
+```
+
+### Checksum Calculation (from paper)
+
+```
+C = Σ(j=0 to 8) G[8,j] + Σ(i=0 to 8) G[i,8] - G[8,8]
+R = G[8,8]  (Reputation)
+```
+
+This is implemented in assembly at runtime.
+
+---
+
+## Boot Process
+
+1. **BIOS POST** — Hardware initialization
+2. **MBR Load** — BIOS loads first 512 bytes to `0x7C00`
+3. **Stage 1** — Bootloader initializes segments, loads Stage 2
+4. **Stage 2** — Kernel initializes video, grid, and enters main loop
+5. **Main Loop** — Handle keyboard, inject entropy, update display
+
+```asm
+; The kernel main loop (simplified)
+main_loop:
+    call handle_keyboard    ; Check for R/Q keys
+    call update_entropy     ; Inject timer entropy into grid
+    call update_display     ; Refresh screen if needed
+    jmp main_loop
+```
+
+---
+
+## Keyboard Controls
+
+| Key | Action |
+|-----|--------|
+| `R` | Refresh grid with new entropy |
+| `Q` | Halt system (CLI + HLT) |
+
+---
+
+## Building & Running
+
+### Build Only
+```bash
+./deedoop_genesis.sh
+```
+
+### Build and Run in QEMU
+```bash
+./deedoop_genesis.sh --run
+```
+
+### Flash to USB
+```bash
+./deedoop_genesis.sh --flash /dev/sdX
+```
+
+### View Genome
+```bash
+./deedoop_genesis.sh --genome
+```
+
+---
+
+## Platform Support
+
+### Host (for building)
+- Linux (Bash)
+- macOS (Bash/Zsh)
+- Windows (Git Bash, WSL, or PowerShell version)
+
+### Target (for running)
+- Any x86 PC with BIOS/Legacy boot
+- QEMU, VirtualBox, VMware, Bochs
+- USB drives, SD cards, floppy disks
+- Real hardware from 1985 to present
+
+---
+
+## Technical Specifications
+
+| Specification | Value |
+|---------------|-------|
+| Architecture | x86 16-bit Real Mode |
+| Boot Standard | BIOS MBR |
+| Image Format | FAT12 Floppy (1.44MB) |
+| Kernel Size | 1024 bytes (2 sectors) |
+| Grid Size | 81 bytes (9×9) |
+| Video Mode | VGA Text 80×25 |
+| Dependencies | None |
+
+---
+
+## What Makes This Revolutionary
+
+### No Toolchain Required
+Traditional OS development needs:
+- Cross-compiler (GCC, Clang)
+- Assembler (NASM, GAS)
+- Linker (LD)
+- Build system (Make, CMake)
+
+DEEDOOP Genesis needs:
+- A shell (bash, zsh, sh)
+- That's it.
+
+### Self-Describing
+The shell script **is** the source code. The hex genome inside **is** the compiled binary. There's nothing else.
+
+### Provably Minimal
+At 1024 bytes of kernel, this may be the smallest distributed OS kernel ever created.
+
+### Theoretically Sound
+Implements the Lattice Resource Protocol as described in the academic paper, with proper checksum calculation and entropy injection.
+
+---
+
+## Files
+
+| File | Description |
+|------|-------------|
+| `deedoop_v14_genesis.sh` | Main build script (contains genome) |
+| `deedoop_genesis.ps1` | Windows PowerShell version |
+| `deedoop.img` | Generated bootable image |
+
+---
+
+## License
+
+**Proprietary — All Rights Reserved**
+
+© 2025 Alexis Eleanor Fagan (aka Alexander Edward Brygider)
+
+No part of this software may be reproduced, distributed, or transmitted without explicit written permission.
+
+
 # DEEDOOP OS v13.0 — THE HYDRA
 
 ## Streaming Capability-Based Distributed Operating System
