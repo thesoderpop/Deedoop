@@ -1,3 +1,268 @@
+# DEEDOOP OS v12.0 — THE QUINE
+
+## A Self-Describing, Self-Replicating Distributed Universal Operating System
+
+**© 2025 Alexis Eleanor Fagan (aka Alexander Edward Brygider). All Rights Reserved Worldwide.**
+
+---
+
+## What Is A Quine?
+
+A **quine** is a program that outputs its own source code. It's a fundamental concept in computability theory, demonstrating self-reference and self-description.
+
+**DEEDOOP OS v12.0** takes this concept to its logical extreme: an entire distributed operating system that carries its source code as data within itself, reconstructs itself from that data, and propagates across networks by transmitting its genome.
+
+---
+
+## The Innovation
+
+### Traditional Distributed Systems
+```
+Node A reads file → sends bytes → Node B writes file → executes
+```
+
+### DEEDOOP Quine
+```
+Node A reconstructs source from memory → transmits genome → Node B executes genome directly
+```
+
+The source code is **never read from disk** during replication. The system is **self-describing** — it knows its own structure.
+
+---
+
+## How It Works
+
+### The Genome
+
+The entire source code is compressed (zlib) and encoded (base64) into a **genome string**:
+
+```
+Original:  46,107 bytes (Python source)
+Genome:    14,884 bytes (compressed)
+Ratio:     32.3%
+```
+
+### The Quine Core
+
+```python
+class QuineCore:
+    def get_source(self) -> str:
+        """THE QUINE OPERATION: Reconstruct source from memory"""
+        return _decompress_genome(_COMPRESSED_GENOME)
+    
+    def get_genome(self) -> str:
+        """Get compressed genome for transmission"""
+        return _compress_source(self.get_source())
+    
+    def spawn(self) -> str:
+        """Generate code that spawns a new instance"""
+        genome = self.get_genome()
+        return f'exec(__import__("zlib").decompress(__import__("base64").b64decode("{genome}")))'
+```
+
+### Replication Methods
+
+**Standard (curl | python):**
+```bash
+curl -s http://SEED:8080 | python3
+```
+
+**Spawn Code (minimal wrapper):**
+```bash
+curl -s http://SEED:8080/spawn | python3
+```
+
+**One-Liner (embedded in shell):**
+```bash
+python3 -c "$(curl -s http://SEED:8080/oneliner)"
+```
+
+**Direct Genome Execution:**
+```python
+exec(__import__("zlib").decompress(__import__("base64").b64decode("GENOME_HERE")))
+```
+
+---
+
+## Genome Verification
+
+Every node carries a **genome hash** (SHA256):
+
+```
+Genome Hash: 4f7637cdb239147c
+```
+
+When nodes communicate, they share their genome hash. This enables:
+
+1. **Integrity Verification** — Detect corrupted transmissions
+2. **Version Detection** — Identify nodes running different versions
+3. **Mutation Tracking** — Track evolution of the OS across generations
+
+---
+
+## Mutations & Evolution
+
+The quine can **mutate itself**:
+
+```bash
+# Apply a mutation
+curl -X POST http://SEED:8080/mutate \
+  -H "Content-Type: application/json" \
+  -d '{"type": "config", "key": "heartbeat", "value": "10"}'
+```
+
+Mutation types:
+- `inject` — Insert code at a marker
+- `replace` — Replace code patterns
+- `config` — Update configuration values
+
+After mutation:
+- New genome hash is generated
+- New source is reconstructed
+- Mutations can propagate to new nodes
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           QUINE CORE                                         │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐              │
+│  │     GENOME      │  │   RECONSTRUCT   │  │     SPAWN       │              │
+│  │ (compressed src)│──│   (decompress)  │──│ (create child)  │              │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘              │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         DEEDOOP KERNEL                                       │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐      │
+│  │ Identity │  │ Scheduler│  │ Workload │  │   P2P    │  │   DNA    │      │
+│  │  (RSA)   │  │  (Jobs)  │  │ Manager  │  │  Mesh    │  │  Server  │      │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘  └──────────┘      │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Supported Workloads
+
+| Workload | Container | Native | GPU |
+|----------|-----------|--------|-----|
+| Docker/Podman | ✅ | — | ✅ |
+| TensorFlow | ✅ | ✅ | ✅ |
+| PyTorch | ✅ | ✅ | ✅ |
+| Blender | ✅ | ✅ | ✅ |
+| Apache Spark | ✅ | ✅ | — |
+| Python Scripts | — | ✅ | — |
+| Shell Scripts | — | ✅ | — |
+| **Quine Operations** | — | ✅ | — |
+
+---
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | Full source code (quine output) |
+| `/spawn` | GET | Minimal spawn wrapper |
+| `/genome` | GET | Compressed genome |
+| `/oneliner` | GET | One-liner exec command |
+| `/key` | GET | Swarm encryption key |
+| `/health` | GET | Node hardware status |
+| `/cluster` | GET | Cluster status |
+| `/jobs` | GET | Job list |
+| `/submit` | POST | Submit new job |
+| `/mutate` | POST | Apply mutation |
+
+---
+
+## CLI Commands
+
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  CLUSTER                           QUINE OPERATIONS                          ║
+║    nodes     - List nodes            quine source - Print source code        ║
+║    resources - Cluster resources     quine genome - Print genome             ║
+║    health    - Local status          quine hash   - Print genome hash        ║
+║                                      quine spawn  - Generate spawn code      ║
+║  JOBS                                mutate <json> - Apply mutation          ║
+║    jobs      - List jobs                                                     ║
+║    job <id>  - Job details         RUN WORKLOADS                             ║
+║                                      run docker <image>                      ║
+║  OTHER                               run python <code>                       ║
+║    help      - This help             run blender <file>                      ║
+║    exit      - Shutdown              run tensorflow <script>                 ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+```
+
+---
+
+## Theoretical Significance
+
+### Self-Reference
+The system demonstrates **Kleene's recursion theorem** in practice — a program that computes its own description.
+
+### Universal Computation
+Combined with commercial workload support, this is a **universal Turing machine** that:
+1. Knows its own program
+2. Can modify its own program
+3. Can replicate its own program
+4. Can execute arbitrary programs
+
+### Distributed Self-Replication
+The system exhibits properties of:
+- **Von Neumann's self-replicating automata**
+- **Quine's paradox of self-reference**
+- **Viral propagation patterns**
+
+---
+
+## Files
+
+| File | Size | Description |
+|------|------|-------------|
+| `deedoop_os_v12_quine.py` | 46 KB | Full source code |
+| `deedoop_quine_launcher.py` | 15 KB | Self-contained quine launcher |
+
+---
+
+## Quick Start
+
+### Start Seed Node
+```bash
+python3 deedoop_os_v12_quine.py
+```
+
+### Join Cluster
+```bash
+curl -s http://SEED:8080 | python3
+```
+
+### Submit a Job
+```bash
+curl -X POST http://SEED:8080/submit \
+  -d '{"type":"python","spec":{"code":"print(42)"}}'
+```
+
+### View Genome
+```bash
+curl http://SEED:8080/genome
+```
+
+---
+
+## License
+
+**Proprietary — All Rights Reserved**
+
+© 2025 Alexis Eleanor Fagan (aka Alexander Edward Brygider)
+
+Unauthorized reproduction, distribution, or commercial use is strictly prohibited.
+
+
+
+
 # INTELLECTUAL PROPERTY ASSIGNMENT & LICENSE
 ## DEEDOOP OS — All Versions
 
